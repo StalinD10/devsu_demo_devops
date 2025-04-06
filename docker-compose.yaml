@@ -1,0 +1,15 @@
+services:
+  demo_service:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    image: demo:v1.0.0
+    environment:
+      NAME_DB: jdbc:h2:file:./test
+      USERNAME_DB: user
+      PASSWORD_DB: password
+      PORT: 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./bin/bash/data:/datah2
