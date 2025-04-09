@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: demo
+  template:
+    metadata:
+      labels:
+        app: demo
+    spec:
+      containers:
+        - name: demo-container
+          image: stalind10/demo_service:v1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: demo-config
+            - secretRef:
+                name: demo-secret
+          volumeMounts:
+            - name: h2data
+              mountPath: /data
+      volumes:
+        - name: h2data
+          emptyDir: {}

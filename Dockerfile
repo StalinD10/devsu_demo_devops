@@ -25,8 +25,6 @@ COPY --from=builder --chown=spring:spring /app/target/*.jar app.jar
 
 USER spring
 
-EXPOSE 8080
-
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD pgrep java > /dev/null || exit 1
 
