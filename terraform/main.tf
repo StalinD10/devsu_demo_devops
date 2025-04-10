@@ -42,6 +42,5 @@ resource "aws_eks_cluster" "eks" {
     authentication_mode                         = "API"
     bootstrap_cluster_creator_admin_permissions = true
   }
-
   depends_on = [aws_iam_role_policy_attachment.eks]
 }
