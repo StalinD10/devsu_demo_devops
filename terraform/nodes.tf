@@ -17,7 +17,6 @@ resource "aws_iam_role" "nodes" {
 POLICY
 }
 
-# This policy now includes AssumeRoleForPodIdentity for the Pod Identity Agent
 resource "aws_iam_role_policy_attachment" "amazon_eks_worker_node_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
   role       = aws_iam_role.nodes.name
@@ -45,7 +44,7 @@ resource "aws_eks_node_group" "general" {
   ]
 
   capacity_type  = "ON_DEMAND"
-  instance_types = ["t3.large"]
+  instance_types = ["t2.micro"]
 
   scaling_config {
     desired_size = 1
