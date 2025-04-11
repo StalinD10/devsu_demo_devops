@@ -141,3 +141,12 @@ jobs:
             echo "ALB aún no está listo. Revisa los logs del controlador:"
             kubectl logs -n kube-system deployment/aws-load-balancer-controller --tail=50
           fi
+      - name: Verify Helm Releases
+        if: always()  # Se ejecuta incluso si pasos anteriores fallaron
+        run: |
+          echo "=== Helm Releases Status ==="
+          helm list -A --failed
+          echo "=== Metrics Server Details ==="
+          helm status metrics-server -n kube-system || echo "Metrics Server not found"
+          echo "=== Pods Status ==="
+          kubectl get pods -n kube-system -l app.kubernetes.io/name=metrics-server
