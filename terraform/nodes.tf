@@ -1,5 +1,5 @@
 resource "aws_iam_role" "nodes" {
-  name = "${local.env}-${local.eks_name}-eks-nodes"
+  name = "${var.env}-${var.eks_name}-eks-nodes"
 
   assume_role_policy = <<POLICY
 {
@@ -32,10 +32,10 @@ resource "aws_iam_role_policy_attachment" "amazon_ec2_container_registry_read_on
   role       = aws_iam_role.nodes.name
 }
 
-resource "aws_eks_node_group" "general" {
+resource "aws_eks_node_group" "node_eks_demo" {
   cluster_name    = aws_eks_cluster.eks.name
-  version         = local.eks_version
-  node_group_name = "general"
+  version         = var.eks_version
+  node_group_name = "node_group_demo"
   node_role_arn   = aws_iam_role.nodes.arn
 
   subnet_ids = [
@@ -44,12 +44,12 @@ resource "aws_eks_node_group" "general" {
   ]
 
   capacity_type  = "ON_DEMAND"
-  instance_types = ["t2.micro"]
+  instance_types = ["t3.large"]
 
   scaling_config {
-    desired_size = 1
-    max_size     = 10
-    min_size     = 0
+    desired_size = 2
+    max_size     = 4
+    min_size     = 2
   }
 
   update_config {
@@ -57,7 +57,7 @@ resource "aws_eks_node_group" "general" {
   }
 
   labels = {
-    role = "general"
+    "node.kubernetes.io/role" = "general"
   }
 
   depends_on = [

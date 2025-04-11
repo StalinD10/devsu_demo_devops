@@ -15,7 +15,7 @@ spec:
       containers:
         - name: demo-container
           image: stalind10/demo_service:v1.0.0
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
           envFrom:
@@ -26,6 +26,14 @@ spec:
           volumeMounts:
             - name: h2data
               mountPath: /data
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 100m
+            limits:
+              memory: 128Mi
+              cpu: 100m
       volumes:
         - name: h2data
           emptyDir: {}
+
