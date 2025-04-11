@@ -1,0 +1,142 @@
+name: Build, Test and Deploy
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.APP_NAME }}
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  EKS_CLUSTER_NAME: "prod-demo"
+  K8S_DEPLOYMENT: "${{ secrets.APP_DEPLOYMENT}}-deployment"
+
+jobs:
+  versioning:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get next version
+        id: get_version
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 || echo "v0.0.0")
+          NEW_VERSION=$(echo $LATEST_TAG | awk -F. -v OFS='.' '{ $NF++; print }')
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+  build:
+      needs: versioning
+      runs-on: ubuntu-24.04
+      outputs:
+        image_tag: ${{ needs.versioning.outputs.version }}
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+  
+        - name: Set up JDK
+          uses: actions/setup-java@v4
+          with:
+            java-version: '17'
+            distribution: 'temurin'
+            cache: 'maven'
+  
+        - name: Build with Maven
+          run: mvn -B clean package
+  
+        - name: Run tests
+          run: mvn -B test
+          continue-on-error: false
+  
+        - name: Static code analysis
+          run: mvn -B checkstyle:checkstyle
+  
+        - name: Code coverage
+          run: mvn -B org.jacoco:jacoco-maven-plugin:prepare-agent test
+  
+        - name: Upload coverage report
+          uses: actions/upload-artifact@v4
+          with:
+            name: jacoco-report
+            path: target/site/jacoco/
+  
+        - name: Set execute permission for Maven Wrapper
+          run: chmod +x mvnw
+  
+        - name: Docker Build
+          run: |
+            docker build \
+              -t $IMAGE_NAME:${{ needs.versioning.outputs.version }} .
+  
+        - name: DockerHub Login
+          run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+  
+        - name: Docker Push
+          run: |
+            docker push $IMAGE_NAME:${{ needs.versioning.outputs.version }}
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    env:
+      CLUSTER_NAME: "prod-demo"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Configure Kubeconfig
+        run: |
+          echo "Configuring access to EKS cluster: prod-demo"
+          aws eks update-kubeconfig \
+            --region ${{ env.AWS_REGION }} \
+            --name prod-demo
+      - name: Verify Cluster Access
+        run: kubectl get nodes
+
+      - name: Deploy to EKS
+        run: |
+          # Aplicar todos los recursos
+          kubectl apply -f k8s/secret.yaml
+          kubectl apply -f k8s/configmap.yaml
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/hpa.yaml
+          kubectl apply -f k8s/ingress.yaml
+          
+          kubectl rollout restart deployment/${{ env.K8S_DEPLOYMENT }}
+          kubectl rollout status deployment/${{ env.K8S_DEPLOYMENT }} --timeout=300s
+  
+      - name: Get ALB URL
+        id: alb
+        run: |
+          echo "Esperando creación del ALB (max 3 minutos)..."
+          for i in {1..18}; do
+            ALB_HOST=$(kubectl get ingress demo-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+            [ -n "$ALB_HOST" ] && break
+            sleep 10
+          done
+          [ -z "$ALB_HOST" ] && exit 1
+          echo "ALB creado: $ALB_HOST"
+          echo "::set-output name=alb_host::$ALB_HOST"
+          echo "::notice::Aplicación desplegada en: http://$ALB_HOST"
+  
+      - name: Show ALB URL
+        run: |
+          echo "🎯 URL del ALB: http://${{ steps.alb.outputs.alb_host }}"
+          echo "ℹ️ Puedes acceder a tu aplicación usando esta URL"
