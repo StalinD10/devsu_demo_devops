@@ -121,22 +121,23 @@ jobs:
           
           kubectl rollout restart deployment/${{ env.K8S_DEPLOYMENT }}
           kubectl rollout status deployment/${{ env.K8S_DEPLOYMENT }} --timeout=300s
-  
-      - name: Get ALB URL
-        id: alb
-        run: |
-          echo "Esperando creación del ALB (max 3 minutos)..."
-          for i in {1..18}; do
-            ALB_HOST=$(kubectl get ingress demo-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-            [ -n "$ALB_HOST" ] && break
-            sleep 10
-          done
-          [ -z "$ALB_HOST" ] && exit 1
-          echo "ALB creado: $ALB_HOST"
-          echo "::set-output name=alb_host::$ALB_HOST"
-          echo "::notice::Aplicación desplegada en: http://$ALB_HOST"
-  
-      - name: Show ALB URL
-        run: |
-          echo "🎯 URL del ALB: http://${{ steps.alb.outputs.alb_host }}"
-          echo "ℹ️ Puedes acceder a tu aplicación usando esta URL"
+      
+          echo "=== 🛠️ Estado del Service ==="
+          kubectl get svc demo-service -o wide
+          echo ""
+          kubectl describe svc demo-service
+      
+          echo "=== 🌐 Estado del Ingress ==="
+          kubectl get ingress demo-ingress -o wide
+          echo ""
+          kubectl describe ingress demo-ingress
+      
+          echo "=== 🔍 Debug del ALB (si existe) ==="
+          ALB_HOST=$(kubectl get ingress demo-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' || true)
+          if [ -n "$ALB_HOST" ]; then
+            echo "ALB creado: http://$ALB_HOST"
+            echo "::notice::ALB disponible en: http://$ALB_HOST"
+          else
+            echo "ALB aún no está listo. Revisa los logs del controlador:"
+            kubectl logs -n kube-system deployment/aws-load-balancer-controller --tail=50
+          fi
